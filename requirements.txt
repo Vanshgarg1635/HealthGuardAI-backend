@@ -35,7 +35,8 @@ jq==1.10.0
 jsonpatch==1.33
 jsonpointer==3.0.0
 langchain==1.0.8
-langchain-core==1.1.0
+langchain-core==1.0.6  # Update this line to match the required range
+langchain-community==0.4.1
 langchain-google-genai==3.1.0
 langgraph==1.0.3
 langgraph-checkpoint==3.0.1
@@ -48,7 +49,7 @@ mdurl==0.1.2
 motor==3.3.1
 mypy==1.18.2
 mypy_extensions==1.1.0
-numpy==1.26.4
+numpy
 oauthlib==3.3.1
 orjson==3.11.4
 ormsgpack==1.12.0

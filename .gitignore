@@ -1,0 +1,42 @@
+# Node.js
+node_modules/
+
+# React build
+/build/
+# React's local development environment
+/.env.local
+/.env.development.local
+/.env.test.local
+/.env.production.local
+/.env
+
+# FastAPI .env (if you use one)
+.env
+
+# Log files
+*.log
+*.log.*
+
+# Operating System files
+.DS_Store
+Thumbs.db
+
+# IDE/Editor files
+.vscode/
+.idea/
+
+# Cloudinary config or secrets file
+cloudinary.env
+
+# Python-specific files (if you’re using FastAPI)
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+*.egg-info/
+
+# Secrets file (optional, if any other files storing secrets)
+secrets.env

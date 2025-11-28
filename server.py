@@ -738,6 +738,7 @@ async def login(credentials: UserLogin):
     return TokenResponse(access_token=access_token, token_type="bearer", user=user_obj)
 
 # Report upload endpoint - improved pipeline
+# Report upload endpoint - improved pipeline
 @api_router.post("/reports/upload", response_model=Report)
 async def upload_reports(files: List[UploadFile] = File(...), current_user: User = Depends(get_current_user)):
     if len(files) > 10:
@@ -928,25 +929,91 @@ async def get_family_members(current_user: User = Depends(get_current_user)):
             members.append({"id": link["requester_id"], "username": link["requester_username"]})
     return {"members": members}
 
-@app.post("/family/remove/{family_link_id}")
-async def remove_family_member(family_link_id: str, current_user: User = Depends(get_current_user)):
-    """
-    Remove a family member connection using the family link id.
-    """
-    # Find the link by family link id
-    link = await db.family_links.find_one({"id": family_link_id})
-    
-    if not link:
-        raise HTTPException(status_code=404, detail="Family link not found")
-    
-    # Ensure the current user is either the requester or the invitee
-    if link["requester_id"] != current_user.id and link["invitee_id"] != current_user.id:
-        raise HTTPException(status_code=403, detail="You are not authorized to remove this family member")
+# Add this BEFORE app.include_router(api_router)
 
-    # Delete the family link
-    await db.family_links.delete_one({"id": family_link_id})
+@api_router.post("/family/remove/{member_id}")
+async def remove_family_member(member_id: str, current_user: User = Depends(get_current_user)):
+    try:
+        logger.info("=== REMOVE FAMILY MEMBER ===")
+        logger.info("Current user ID: %s", current_user.id)
+        logger.info("Member ID to remove: %s", member_id)
+        
+        # Find the family link between current user and the member to be removed
+        link = await db.family_links.find_one({
+            "$or": [
+                {"requester_id": current_user.id, "invitee_id": member_id, "status": "accepted"},
+                {"requester_id": member_id, "invitee_id": current_user.id, "status": "accepted"}
+            ]
+        })
+        
+        logger.info("Link found: %s", link is not None)
+        if link:
+            logger.info("Link ID: %s", link.get("id"))
+        
+        if not link:
+            logger.warning("Family link not found for user %s removing %s", current_user.id, member_id)
+            raise HTTPException(status_code=404, detail="Family link not found")
+        
+        # Delete the family link
+        result = await db.family_links.delete_one({"_id": link["_id"]})
+        
+        logger.info("Delete result - deleted_count: %d", result.deleted_count)
+        
+        if result.deleted_count == 0:
+            logger.error("Failed to delete family link with _id %s", link["_id"])
+            raise HTTPException(status_code=500, detail="Failed to remove family member")
+        
+        logger.info("✅ User %s successfully removed family member %s", current_user.id, member_id)
+        
+        return {
+            "message": "Family member removed successfully",
+            "status": "success",
+            "member_id": member_id
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("❌ Error removing family member: %s", e)
+        raise HTTPException(status_code=500, detail=f"Failed to remove family member: {str(e)}")
 
-    return {"message": f"Family member with link id {family_link_id} has been removed."}
+
+@api_router.delete("/reports/{report_id}")
+async def delete_report(report_id: str, current_user: User = Depends(get_current_user)):
+    try:
+        logger.info("=== DELETE REPORT ===")
+        logger.info("Current user ID: %s", current_user.id)
+        logger.info("Report ID to delete: %s", report_id)
+        
+        # Find the report
+        report = await db.reports.find_one({"id": report_id, "user_id": current_user.id})
+        
+        if not report:
+            logger.warning("Report not found or unauthorized: %s", report_id)
+            raise HTTPException(status_code=404, detail="Report not found")
+        
+        # Delete the report
+        result = await db.reports.delete_one({"_id": report["_id"]})
+        
+        logger.info("Delete result - deleted_count: %d", result.deleted_count)
+        
+        if result.deleted_count == 0:
+            logger.error("Failed to delete report with _id %s", report["_id"])
+            raise HTTPException(status_code=500, detail="Failed to delete report")
+        
+        logger.info("✅ User %s successfully deleted report %s", current_user.id, report_id)
+        
+        return {
+            "message": "Report deleted successfully",
+            "status": "success",
+            "report_id": report_id
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("❌ Error deleting report: %s", e)
+        raise HTTPException(status_code=500, detail=f"Failed to delete report: {str(e)}")
 
 
 @api_router.post("/chat", response_model=ChatResponse)
@@ -975,12 +1042,15 @@ Respond in friendly tone.
         logger.exception("Chat error: %s", e)
         raise HTTPException(status_code=500, detail="Failed to process chat message")
 
+
 # Startup / shutdown
 @app.on_event("startup")
 async def startup_event():
     await initialize_health_standards()
     logger.info("Health standards initialized and retriever built (if possible)")
 
+
+# ===== REGISTER ROUTER =====
 app.include_router(api_router)
 
 app.add_middleware(
